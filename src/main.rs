@@ -1,6 +1,9 @@
 #![deny(bare_trait_objects)]
 #![feature(try_from)]
 
+#[macro_use]
+extern crate zydis;
+
 use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::ffi::CStr;
@@ -21,6 +24,10 @@ use zydis::gen::{
 };
 use zydis::gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat};
 use zydis::{gen::ZydisStatusCodes, Decoder, Formatter, FormatterProperty};
+
+mod rewrite_condition_code;
+
+use self::rewrite_condition_code::{format_operand_imm, print_mnemonic, UserData};
 
 enum Arch {
     X86,
@@ -43,6 +50,8 @@ struct Options {
     hex_padding_addr: Option<u8>,
     hex_padding_disp: Option<u8>,
     hex_padding_imm: Option<u8>,
+
+    rewrite_cc: Option<bool>,
 }
 
 trait ParseStrRadix<T> {
@@ -97,6 +106,8 @@ impl Options {
             "imm_format=auto"             => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_AUTO),
             "imm_format=signed"           => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_SIGNED),
             "imm_format=unsigned"         => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_UNSIGNED),
+            "rewrite_cc=true"             => self.rewrite_cc     = Some(true),
+            "rewrite_cc=false"            => self.rewrite_cc     = Some(false),
             _                             => {
                 parse_number!(self.base,             opt, "base=");
                 parse_number!(self.hex_padding_addr, opt, "pad_addr=");
@@ -107,7 +118,9 @@ impl Options {
     }
 }
 
-impl<'a> TryFrom<Options> for (u64, Formatter<'a>, Decoder) {
+struct ParsedOptions<'a>(Option<UserData>, u64, Formatter<'a>, Decoder);
+
+impl<'a> TryFrom<Options> for ParsedOptions<'a> {
     type Error = ZydisStatusCodes;
 
     #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -132,7 +145,17 @@ impl<'a> TryFrom<Options> for (u64, Formatter<'a>, Decoder) {
 
         let base = options.base.unwrap_or(0);
 
-        Ok((base, formatter, decoder))
+        let user_data = if options.rewrite_cc.unwrap_or(false) {
+            Some(UserData {
+                orig_print_mnemonic: formatter.set_print_mnemonic(Box::new(print_mnemonic))?,
+                orig_format_operand: formatter.set_format_operand_imm(Box::new(format_operand_imm))?,
+                omit_immediate: false,
+            })
+        } else {
+            None
+        };
+
+        Ok(ParsedOptions(user_data, base, formatter, decoder))
     }
 }
 
@@ -187,12 +210,16 @@ impl Handler {
    OPTIONS can be one or more of the following, seperated by a space:
    +x86, +x64, +base=0..2^64 +uppercase={true|false}, +force_memseg={true|false}, +force_memsize={true|false},
    +address_format={absolute|unsigned_rel|signed_rel}, +disp_format={signed|unsigned}, +imm_format={auto|signed|unsigned}
-   +pad_addr=0..255 +pad_disp=0-255 +pad_imm=0-255
+   +pad_addr=0..255 +pad_disp=0-255 +pad_imm=0-255 +rewrite_cc={false|true}
 Defaults are:
    +x86 +base=0 +uppercase=false 
    +force_memseg=false +force_memsize=false +address_format=absolute
    +disp_foramt=signed +imm_format=unsigned
    +pad_addr=2 +pad_disp=2 +pad_imm=2
+   +rewrite_cc=false
+
+   rewrite_cc: rewrite condition codes in (V)CMPPS and (V)CMPPD instructions.
+
 Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as if there is no `x` directly following it
 (i.e. you can most likely paste the data in any format you like)
 For example:
@@ -223,7 +250,7 @@ For example:
             }
         }
 
-        let (base, formatter, decoder) = options.try_into().unwrap();
+        let ParsedOptions(mut user_data, base, formatter, decoder) = options.try_into().unwrap();
 
         let mut message = String::new();
         let mut buffer = vec![0u8; 200];
@@ -231,8 +258,16 @@ For example:
         message.push_str("```x86asm\n");
 
         for (insn, ip) in decoder.instruction_iterator(&bytes, base) {
+            let user_data: Option<&mut dyn std::any::Any> = match &mut user_data {
+                Some(x) => {
+                    x.omit_immediate = false;
+                    Some(x)
+                }
+                None => None,
+            };
+
             formatter
-                .format_instruction_raw(&insn, &mut buffer, None)
+                .format_instruction_raw(&insn, &mut buffer, user_data)
                 .unwrap();
 
             let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }

@@ -927,7 +927,7 @@ dependencies = [
 [[package]]
 name = "zydis"
 version = "0.0.4"
-source = "git+https://github.com/zyantific/zydis-rs/#66e7c4cf1c3be0ab01e12fdad40731c62982a9e6"
+source = "git+https://github.com/zyantific/zydis-rs/#9ae1f2c8155fe7e00a501a8c1bcb43218e46b261"
 dependencies = [
  "bindgen 0.37.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
