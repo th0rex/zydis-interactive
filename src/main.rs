@@ -12,7 +12,7 @@ use std::num::ParseIntError;
 
 use arrayvec::{Array, ArrayVec};
 
-use discord::model::{Event, Game, GameType, Message};
+use discord::model::{Event, Message};
 use discord::Discord;
 
 use zydis::gen::{
