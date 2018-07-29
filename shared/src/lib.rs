@@ -27,7 +27,8 @@ mod rewrite_condition_code;
 
 use self::rewrite_condition_code::{format_operand_imm, print_mnemonic, UserData};
 
-static HELP_MESSAGE: &'static str = r#"Available commands:
+static HELP_MESSAGE: &'static str = r#"https://zydis.re
+Available commands:
 ```
 !help - Help
 !dis OPTIONS <data here> - disassemble
