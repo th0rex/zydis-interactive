@@ -185,11 +185,12 @@ impl Handler {
 !help - Help
 !dis OPTIONS <data here> - disassemble
    OPTIONS can be one or more of the following, seperated by a space:
-   +x86, +x64, +uppercase={true|false}, +force_memseg={true|false}, +force_memsize={true|false},
+   +x86, +x64, +base=0..2^64 +uppercase={true|false}, +force_memseg={true|false}, +force_memsize={true|false},
    +address_format={absolute|unsigned_rel|signed_rel}, +disp_format={signed|unsigned}, +imm_format={auto|signed|unsigned}
-   +pad_addr=0-255 +pad_disp=0-255 +pad_imm=0-255
+   +pad_addr=0..255 +pad_disp=0-255 +pad_imm=0-255
 Defaults are:
-   +x86 +uppercase=false +force_memseg=false +force_memsize=false +address_format=absolute
+   +x86 +base=0 +uppercase=false 
+   +force_memseg=false +force_memsize=false +address_format=absolute
    +disp_foramt=signed +imm_format=unsigned
    +pad_addr=2 +pad_disp=2 +pad_imm=2
 Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as if there is no `x` directly following it
