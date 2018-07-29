@@ -1,0 +1,11 @@
+cargo-features = ["edition"]
+
+[package]
+name = "zycord"
+version = "0.1.0"
+authors = ["th0rex"]
+edition = "2018"
+
+[dependencies]
+serenity = "0.5.5"
+zydis = { git = "https://github.com/zyantific/zydis-rs/" }
