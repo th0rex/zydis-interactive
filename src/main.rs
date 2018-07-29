@@ -222,16 +222,16 @@ impl Handler {
    +pad_imm=0..255 Number of padding bytes for immediates
    +rewrite_cc={false|true} Rewrite condition codes in (V)CMPPS and (V)CMPPD to human readable form ("eq", "lt", ...)
 Defaults are:
-   +x86 +base=0 +uppercase=false 
+   +x86 +base=0 +uppercase=false
    +force_memseg=false +force_memsize=false +address_format=absolute
-   +disp_foramt=signed +imm_format=unsigned
+   +disp_format=signed +imm_format=unsigned
    +pad_addr=2 +pad_disp=2 +pad_imm=2
    +rewrite_cc=false
 
 Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data if there is no `x` directly following it
 (i.e. you can most likely paste the data in any format you like)
-For example:
 ```
+For example:
 !dis +x64 "\x90\x90"
 !dis +x64 0x90, 0x90
 !dis +x64 9090
