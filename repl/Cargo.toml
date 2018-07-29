@@ -1,0 +1,10 @@
+cargo-features =  ["edition"]
+
+[package]
+name = "repl"
+version = "0.1.0"
+authors = ["th0rex"]
+edition = "2018"
+
+[dependencies]
+shared = { path = "../shared" }

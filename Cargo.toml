@@ -2,6 +2,7 @@ cargo-features = ["edition"]
 
 [workspace]
 members = [
+  "repl",
   "shared",
   "zycord_serenity",
 ]
