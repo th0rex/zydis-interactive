@@ -49,7 +49,7 @@ impl EventHandler for Handler {
         println!("{} is connected", ready.user.name);
         ctx.set_game(Game {
             kind: GameType::Playing,
-            name: "Zydis: https://zydis.re".into(),
+            name: "https://zydis.re".into(),
             url: None,
         });
     }
