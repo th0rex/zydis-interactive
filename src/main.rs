@@ -62,7 +62,7 @@ impl ParseStrRadix<u8> for str {
 }
 
 macro_rules! parse_number {
-    ($v:expr, $o:expr, $s:expr, $t:expr) => {
+    ($v:expr, $o:expr, $s:expr) => {
         let len = $s.len();
         if $o.len() > len && &$o[..len] == $s {
             let tmp = &$o[len..];
@@ -98,10 +98,10 @@ impl Options {
             "imm_format=signed"           => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_SIGNED),
             "imm_format=unsigned"         => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_UNSIGNED),
             _                             => {
-                parse_number!(self.base,             opt, "base=",     u64);
-                parse_number!(self.hex_padding_addr, opt, "pad_addr=", u8);
-                parse_number!(self.hex_padding_disp, opt, "pad_disp=", u8);
-                parse_number!(self.hex_padding_imm,  opt, "pad_imm=",  u8);
+                parse_number!(self.base,             opt, "base=");
+                parse_number!(self.hex_padding_addr, opt, "pad_addr=");
+                parse_number!(self.hex_padding_disp, opt, "pad_disp=");
+                parse_number!(self.hex_padding_imm,  opt, "pad_imm=");
             },
         }
     }
