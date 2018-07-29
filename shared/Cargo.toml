@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 # Not really a direct dependency but we want to support Vecs on the stack.
 arrayvec = "0.4.7"
+failure = "0.1.1"
 zydis = { git = "https://github.com/zyantific/zydis-rs/" }

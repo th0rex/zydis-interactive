@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         let stdin = stdin();
         stdin.lock().read_line(&mut inp)?;
 
-        handle_command(&inp, &mut bytes, &mut out, None, None);
+        handle_command(&inp, &mut bytes, &mut out, None, None).unwrap();
 
         print!("{}\n> ", out);
         stdout().flush()?;

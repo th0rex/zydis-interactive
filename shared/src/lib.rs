@@ -2,14 +2,21 @@
 #![feature(try_from)]
 
 #[macro_use]
+extern crate failure;
+
+#[macro_use]
 extern crate zydis;
 
 use std::convert::{TryFrom, TryInto};
 use std::ffi::CStr;
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::num::ParseIntError;
+use std::result;
+use std::str;
 
 use arrayvec::{Array, ArrayVec};
+
+use failure::{Context, ResultExt};
 
 use zydis::gen::{
     ZYDIS_ADDRESS_WIDTH_32, ZYDIS_ADDRESS_WIDTH_64, ZYDIS_MACHINE_MODE_LONG_64,
@@ -20,12 +27,49 @@ use zydis::gen::{
 };
 use zydis::{
     gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat, ZydisStatusCodes},
-    Decoder, Formatter, FormatterProperty,
+    status_description, Decoder, Formatter, FormatterProperty,
 };
 
 mod rewrite_condition_code;
 
 use self::rewrite_condition_code::{format_operand_imm, print_mnemonic, UserData};
+
+#[derive(Debug)]
+pub struct Error {
+    inner: Context<ErrorKind>,
+}
+
+#[derive(Clone, Debug, Fail)]
+pub enum ErrorKind {
+    #[fail(display = "Zydis formatting error: {}", _0)]
+    FormattingError(&'static str),
+    #[fail(display = "Invalid utf8 from zydis: {}", _0)]
+    UTF8Error(str::Utf8Error),
+    #[fail(display = "Failed to append to string: {}", _0)]
+    WriteError(fmt::Error),
+}
+
+impl Error {
+    pub fn kind(&self) -> ErrorKind {
+        self.inner.get_context().clone()
+    }
+}
+
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Error {
+        Error {
+            inner: Context::new(kind),
+        }
+    }
+}
+
+impl From<Context<ErrorKind>> for Error {
+    fn from(inner: Context<ErrorKind>) -> Error {
+        Error { inner: inner }
+    }
+}
+
+pub type Result<T> = result::Result<T, Error>;
 
 static HELP_MESSAGE: &'static str = r#"https://zydis.re
 Available commands:
@@ -118,17 +162,17 @@ struct Options {
 }
 
 trait ParseStrRadix<T> {
-    fn parse_radix(&self, base: u32) -> Result<T, ParseIntError>;
+    fn parse_radix(&self, base: u32) -> result::Result<T, ParseIntError>;
 }
 
 impl ParseStrRadix<u64> for str {
-    fn parse_radix(&self, base: u32) -> Result<u64, ParseIntError> {
+    fn parse_radix(&self, base: u32) -> result::Result<u64, ParseIntError> {
         u64::from_str_radix(self, base)
     }
 }
 
 impl ParseStrRadix<u8> for str {
-    fn parse_radix(&self, base: u32) -> Result<u8, ParseIntError> {
+    fn parse_radix(&self, base: u32) -> result::Result<u8, ParseIntError> {
         u8::from_str_radix(self, base)
     }
 }
@@ -187,7 +231,7 @@ impl<'a> TryFrom<Options> for ParsedOptions<'a> {
     type Error = ZydisStatusCodes;
 
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn try_from(options: Options) -> Result<Self, Self::Error> {
+    fn try_from(options: Options) -> result::Result<Self, Self::Error> {
         let mut formatter = Formatter::new(ZYDIS_FORMATTER_STYLE_INTEL)?;
 
         let decoder = match options.arch.unwrap_or(Arch::X86) {
@@ -261,7 +305,7 @@ fn disassemble<V: VecLike<u8>>(
     bytes: &mut V,
     out: &mut String,
     length_limit: Option<usize>,
-) -> bool {
+) -> Result<bool> {
     let mut options = Options::default();
     let limit = length_limit.unwrap_or_else(usize::max_value);
 
@@ -292,21 +336,21 @@ fn disassemble<V: VecLike<u8>>(
 
         formatter
             .format_instruction_raw(&insn, &mut buffer, user_data)
-            .unwrap();
+            .map_err(|x| ErrorKind::FormattingError(status_description(x)))?;
 
         let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
             .to_str()
-            .unwrap();
+            .with_context(|e| ErrorKind::UTF8Error(e.clone()))?;
 
         // Limit the length of the message
         if out.len() + insn.len() > limit {
-            return true;
+            return Ok(true);
         }
 
-        write!(out, "0x{:08X} {}\n", ip, insn).unwrap();
+        write!(out, "0x{:08X} {}\n", ip, insn).with_context(|e| ErrorKind::WriteError(e.clone()))?;
     }
 
-    false
+    Ok(false)
 }
 
 pub enum CommandResult {
@@ -320,28 +364,28 @@ pub fn handle_command<V: VecLike<u8>>(
     out: &mut String,
     length_limit: Option<usize>,
     init: Option<&str>,
-) -> Option<CommandResult> {
+) -> Result<Option<CommandResult>> {
     if command.len() < 5 {
-        return None;
+        return Ok(None);
     }
 
     match &command[..5] {
         "!help" => {
             out.clear();
             out.push_str(HELP_MESSAGE);
-            Some(CommandResult::Help)
+            Ok(Some(CommandResult::Help))
         }
         "!dis " => {
             bytes.clear();
             out.clear();
             out.push_str(init.unwrap_or(""));
-            Some(CommandResult::Disassembled(disassemble(
+            Ok(Some(CommandResult::Disassembled(disassemble(
                 &command[5..],
                 bytes,
                 out,
                 length_limit,
-            )))
+            )?)))
         }
-        _ => None,
+        _ => Ok(None),
     }
 }

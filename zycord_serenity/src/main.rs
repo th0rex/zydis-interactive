@@ -12,6 +12,12 @@ use shared::{handle_command, CommandResult};
 
 struct Handler;
 
+fn send(msg: &Message, s: &str) {
+    if let Err(why) = msg.channel_id.say(s) {
+        println!("error sending message: {}", why);
+    }
+}
+
 impl EventHandler for Handler {
     fn message(&self, _: Context, msg: Message) {
         if msg.author.bot {
@@ -28,7 +34,7 @@ impl EventHandler for Handler {
             Some(2000 - 6),
             Some("```x86asm\n"),
         ) {
-            Some(x) => {
+            Ok(Some(x)) => {
                 if let CommandResult::Disassembled(x) = x {
                     if x {
                         out.push_str("...");
@@ -37,10 +43,9 @@ impl EventHandler for Handler {
                     out.push_str("```");
                 }
 
-                if let Err(why) = msg.channel_id.say(out) {
-                    println!("error sending message: {}", why);
-                }
+                send(&msg, &out);
             }
+            Err(e) => send(&msg, &format!("internal error occured: {}", e.kind())),
             _ => {}
         }
     }
