@@ -3,5 +3,5 @@ cargo-features = ["edition"]
 [workspace]
 members = [
   "shared",
-  "zycord_discord_rs",
+  "zycord_serenity",
 ]
