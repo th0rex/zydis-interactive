@@ -670,6 +670,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zydis 0.0.4 (git+https://github.com/zyantific/zydis-rs/)",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -916,12 +924,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "zycord"
+name = "zycord_discord_rs"
 version = "0.1.0"
 dependencies = [
  "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "discord 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zydis 0.0.4 (git+https://github.com/zyantific/zydis-rs/)",
+ "shared 0.1.0",
 ]
 
 [[package]]

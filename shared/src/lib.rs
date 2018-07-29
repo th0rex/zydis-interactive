@@ -5,15 +5,11 @@
 extern crate zydis;
 
 use std::convert::{TryFrom, TryInto};
-use std::env;
 use std::ffi::CStr;
 use std::fmt::Write;
 use std::num::ParseIntError;
 
 use arrayvec::{Array, ArrayVec};
-
-use discord::model::{Event, Message};
-use discord::Discord;
 
 use zydis::gen::{
     ZYDIS_ADDRESS_WIDTH_32, ZYDIS_ADDRESS_WIDTH_64, ZYDIS_MACHINE_MODE_LONG_64,
@@ -22,12 +18,78 @@ use zydis::gen::{
     ZYDIS_DISP_FORMAT_HEX_SIGNED, ZYDIS_DISP_FORMAT_HEX_UNSIGNED, ZYDIS_FORMATTER_STYLE_INTEL,
     ZYDIS_IMM_FORMAT_HEX_AUTO, ZYDIS_IMM_FORMAT_HEX_SIGNED, ZYDIS_IMM_FORMAT_HEX_UNSIGNED,
 };
-use zydis::gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat};
-use zydis::{gen::ZydisStatusCodes, Decoder, Formatter, FormatterProperty};
+use zydis::{
+    gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat, ZydisStatusCodes},
+    Decoder, Formatter, FormatterProperty,
+};
 
 mod rewrite_condition_code;
 
 use self::rewrite_condition_code::{format_operand_imm, print_mnemonic, UserData};
+
+static HELP_MESSAGE: &'static str = r#"Available commands:
+```
+!help - Help
+!dis OPTIONS <data here> - disassemble
+   OPTIONS can be one or more of the following, seperated by a space:
+   +x86  32 bit mode
+   +x64  64 bit mode
+   +base=0..2^64 Base address to use in relative instructions
+   +uppercase={true|false} Uppercase mnemonics
+   +force_memseg={true|false} Force showing the segment
+   +force_memsize={true|false} Force showing the size
+   +address_format={absolute|unsigned_rel|signed_rel} What format to show addresses in
+   +disp_format={signed|unsigned} What format to show displacements in
+   +imm_format={auto|signed|unsigned} What format to show immediates in
+   +pad_addr=0..255 Number of padding bytes for addresses
+   +pad_disp=0..255 Number of padding bytes for displacements
+   +pad_imm=0..255 Number of padding bytes for immediates
+   +rewrite_cc={false|true} Rewrite condition codes in (V)CMPPS and (V)CMPPD to human readable form ("eq", "lt", ...)
+Defaults are:
+   +x86 +base=0 +uppercase=false
+   +force_memseg=false +force_memsize=false +address_format=absolute
+   +disp_format=signed +imm_format=unsigned
+   +pad_addr=2 +pad_disp=2 +pad_imm=2
+   +rewrite_cc=false
+
+Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data if there is no `x` directly following it
+(i.e. you can most likely paste the data in any format you like)
+```
+For example:
+!dis +x64 "\x90\x90"
+!dis +x64 0x90, 0x90
+!dis +x64 9090
+"#;
+
+pub trait VecLike<T>: AsRef<[T]> {
+    fn clear(&mut self);
+
+    fn push(&mut self, item: T);
+}
+
+impl<T> VecLike<T> for Vec<T> {
+    #[inline]
+    fn clear(&mut self) {
+        Vec::clear(self)
+    }
+
+    #[inline]
+    fn push(&mut self, item: T) {
+        Vec::push(self, item)
+    }
+}
+
+impl<A: Array> VecLike<A::Item> for ArrayVec<A> {
+    #[inline]
+    fn clear(&mut self) {
+        ArrayVec::<A>::clear(self)
+    }
+
+    #[inline]
+    fn push(&mut self, item: A::Item) {
+        ArrayVec::<A>::push(self, item)
+    }
+}
 
 enum Arch {
     X86,
@@ -172,10 +234,7 @@ fn is_hex_digit(b: u8) -> bool {
     (b as char).is_digit(16)
 }
 
-fn decode_bytes_into<A>(hex: &[u8], bytes: &mut ArrayVec<A>)
-where
-    A: Array<Item = u8>,
-{
+fn decode_bytes_into<V: VecLike<u8>>(hex: &[u8], bytes: &mut V) {
     let mut last_val = None;
 
     for (i, &b) in hex.iter().enumerate() {
@@ -196,154 +255,92 @@ where
     }
 }
 
-struct Handler {
-    discord: Discord,
+fn disassemble<V: VecLike<u8>>(
+    data: &str,
+    bytes: &mut V,
+    out: &mut String,
+    length_limit: Option<usize>,
+) -> bool {
+    let mut options = Options::default();
+    let limit = length_limit.unwrap_or_else(usize::max_value);
+
+    for thing in data.trim().split(' ') {
+        if thing.len() == 0 {
+            continue;
+        }
+
+        if &thing[..1] == "+" {
+            options.parse_option(&thing[1..]);
+        } else {
+            decode_bytes_into(thing.as_bytes(), bytes);
+        }
+    }
+
+    let ParsedOptions(mut user_data, base, formatter, decoder) = options.try_into().unwrap();
+
+    let mut buffer = vec![0u8; 200];
+
+    for (insn, ip) in decoder.instruction_iterator(bytes.as_ref(), base) {
+        let user_data: Option<&mut dyn std::any::Any> = match &mut user_data {
+            Some(x) => {
+                x.omit_immediate = false;
+                Some(x)
+            }
+            None => None,
+        };
+
+        formatter
+            .format_instruction_raw(&insn, &mut buffer, user_data)
+            .unwrap();
+
+        let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
+            .to_str()
+            .unwrap();
+
+        // Limit the length of the message
+        if out.len() + insn.len() > limit {
+            return true;
+        }
+
+        write!(out, "0x{:08X} {}\n", ip, insn).unwrap();
+    }
+
+    false
 }
 
-impl Handler {
-    fn help_message(&self, msg: &Message) {
-        self.discord.send_message(msg.channel_id,
-                r#"Available commands:
-```
-!help - Help
-!dis OPTIONS <data here> - disassemble
-   OPTIONS can be one or more of the following, seperated by a space:
-   +x86  32 bit mode
-   +x64  64 bit mode
-   +base=0..2^64 Base address to use in relative instructions
-   +uppercase={true|false} Uppercase mnemonics
-   +force_memseg={true|false} Force showing the segment
-   +force_memsize={true|false} Force showing the size
-   +address_format={absolute|unsigned_rel|signed_rel} What format to show addresses in
-   +disp_format={signed|unsigned} What format to show displacements in
-   +imm_format={auto|signed|unsigned} What format to show immediates in
-   +pad_addr=0..255 Number of padding bytes for addresses
-   +pad_disp=0..255 Number of padding bytes for displacements
-   +pad_imm=0..255 Number of padding bytes for immediates
-   +rewrite_cc={false|true} Rewrite condition codes in (V)CMPPS and (V)CMPPD to human readable form ("eq", "lt", ...)
-Defaults are:
-   +x86 +base=0 +uppercase=false
-   +force_memseg=false +force_memsize=false +address_format=absolute
-   +disp_format=signed +imm_format=unsigned
-   +pad_addr=2 +pad_disp=2 +pad_imm=2
-   +rewrite_cc=false
-
-Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data if there is no `x` directly following it
-(i.e. you can most likely paste the data in any format you like)
-```
-For example:
-!dis +x64 "\x90\x90"
-!dis +x64 0x90, 0x90
-!dis +x64 9090
-"#, "", false
-            )
-            .unwrap();
-    }
-
-    fn disassemble(&self, data: &str, msg: &Message) {
-        // 1024 bytes is enough since discord messages are limited to 2000 chars and we can decode
-        // 1000 bytes at maximum.
-        let mut bytes = ArrayVec::<[_; 1024]>::new();
-        let mut options = Options::default();
-
-        for thing in data.trim().split(' ') {
-            if thing.len() == 0 {
-                continue;
-            }
-
-            if &thing[..1] == "+" {
-                options.parse_option(&thing[1..]);
-            } else {
-                decode_bytes_into(thing.as_bytes(), &mut bytes);
-            }
-        }
-
-        let ParsedOptions(mut user_data, base, formatter, decoder) = options.try_into().unwrap();
-
-        let mut message = String::new();
-        let mut buffer = vec![0u8; 200];
-
-        message.push_str("```x86asm\n");
-
-        for (insn, ip) in decoder.instruction_iterator(&bytes, base) {
-            let user_data: Option<&mut dyn std::any::Any> = match &mut user_data {
-                Some(x) => {
-                    x.omit_immediate = false;
-                    Some(x)
-                }
-                None => None,
-            };
-
-            formatter
-                .format_instruction_raw(&insn, &mut buffer, user_data)
-                .unwrap();
-
-            let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
-                .to_str()
-                .unwrap();
-
-            // Limit the length of the message
-            if message.len() + insn.len() > 2000 - 6 {
-                message.push_str("...");
-                break;
-            }
-
-            write!(message, "0x{:08X} {}\n", ip, insn).unwrap();
-        }
-
-        message.push_str("```");
-        assert!(message.len() <= 2000);
-
-        self.discord
-            .send_message(msg.channel_id, &message, "", false)
-            .unwrap();
-    }
-
-    fn handle_message(&self, msg: Message) {
-        if msg.author.bot {
-            return;
-        }
-
-        let content = &msg.content;
-
-        if content.len() < 5 {
-            return;
-        }
-
-        match &content[..5] {
-            "!help" => self.help_message(&msg),
-            "!dis " => self.disassemble(&content[2..], &msg),
-            _ => {}
-        }
-    }
+pub enum CommandResult {
+    Help,
+    Disassembled(bool),
 }
 
-fn main() {
-    let token = env::var("DISCORD_TOKEN").expect("Expected token");
-    let discord = Discord::from_bot_token(&token).unwrap();
-    let handler = Handler { discord };
+pub fn handle_command<V: VecLike<u8>>(
+    command: &str,
+    bytes: &mut V,
+    out: &mut String,
+    length_limit: Option<usize>,
+    init: Option<&str>,
+) -> Option<CommandResult> {
+    if command.len() < 5 {
+        return None;
+    }
 
-    let (mut conn, _) = handler.discord.connect().unwrap();
-
-    // TODO: Why doesn't this work?
-
-    //conn.set_game(Some(Game {
-    //    name: "Zydis".into(),
-    //    url: Some("https://zydis.re".into()),
-    //    kind: GameType::Playing,
-    //}));
-
-    loop {
-        match conn.recv_event() {
-            Ok(Event::MessageCreate(msg)) => handler.handle_message(msg),
-            Ok(_) => {}
-            Err(discord::Error::Closed(code, body)) => {
-                println!("gateway closed with code {:?}: {}", code, body);
-
-                let (new_conn, _) = handler.discord.connect().expect("connect failed");
-                conn = new_conn;
-            }
-            Err(e) => println!("{}", e),
+    match &command[..5] {
+        "!help" => {
+            out.clear();
+            out.push_str(HELP_MESSAGE);
+            Some(CommandResult::Help)
         }
+        "!dis " => {
+            bytes.clear();
+            out.clear();
+            out.push_str(init.unwrap_or(""));
+            Some(CommandResult::Disassembled(disassemble(
+                &command[5..],
+                bytes,
+                out,
+                length_limit,
+            )))
+        }
+        _ => None,
     }
 }

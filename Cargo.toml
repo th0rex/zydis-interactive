@@ -1,12 +1,7 @@
 cargo-features = ["edition"]
 
-[package]
-name = "zycord"
-version = "0.1.0"
-authors = ["th0rex"]
-edition = "2018"
-
-[dependencies]
-arrayvec = "0.4.7"
-discord = "0.8"
-zydis = { git = "https://github.com/zyantific/zydis-rs/" }
+[workspace]
+members = [
+  "shared",
+  "zycord_discord_rs",
+]
