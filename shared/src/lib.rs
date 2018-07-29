@@ -321,7 +321,9 @@ fn disassemble<V: VecLike<u8>>(
         }
     }
 
-    let ParsedOptions(mut user_data, base, formatter, decoder) = options.try_into().unwrap();
+    let ParsedOptions(mut user_data, base, formatter, decoder) = options
+        .try_into()
+        .map_err(|x| ErrorKind::FormattingError(status_description(x)))?;
 
     let mut buffer = vec![0u8; 200];
 
