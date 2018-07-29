@@ -8,4 +8,4 @@ COPY Cargo.lock Cargo.lock
 ENV CC=clang-4.0
 ENV CXX=clang++-4.0
 RUN cd zycord_serenity && cargo build --release 
-CMD cd zycord_serenity && cargo build --release
+CMD cd zycord_serenity && cargo run --release
