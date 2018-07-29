@@ -7,5 +7,6 @@ authors = ["th0rex"]
 edition = "2018"
 
 [dependencies]
+arrayvec = "0.4.7"
 serenity = "0.5.5"
 zydis = { git = "https://github.com/zyantific/zydis-rs/" }

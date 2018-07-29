@@ -7,6 +7,8 @@ use std::ffi::CStr;
 use std::fmt::Write;
 use std::num::ParseIntError;
 
+use arrayvec::{Array, ArrayVec};
+
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
@@ -122,8 +124,8 @@ impl<'a> TryFrom<Options> for (u64, Formatter<'a>, Decoder) {
         formatter.set_property(FormatterProperty::ForceMemseg(options.force_memseg.unwrap_or(false)))?;
         formatter.set_property(FormatterProperty::ForceMemsize(options.force_memsize.unwrap_or(false)))?;
         formatter.set_property(FormatterProperty::AddressFormat(options.address_format.unwrap_or(ZYDIS_ADDR_FORMAT_ABSOLUTE)))?;
-        formatter.set_property(FormatterProperty::DispFormat(options.disp_format.unwrap_or(ZYDIS_DISP_FORMAT_HEX_UNSIGNED)))?;
-        formatter.set_property(FormatterProperty::ImmFormat(options.imm_format.unwrap_or(ZYDIS_IMM_FORMAT_HEX_AUTO)))?;
+        formatter.set_property(FormatterProperty::DispFormat(options.disp_format.unwrap_or(ZYDIS_DISP_FORMAT_HEX_SIGNED)))?;
+        formatter.set_property(FormatterProperty::ImmFormat(options.imm_format.unwrap_or(ZYDIS_IMM_FORMAT_HEX_UNSIGNED)))?;
         formatter.set_property(FormatterProperty::HexUppercase(options.hex_uppercase.unwrap_or(true)))?;
         formatter.set_property(FormatterProperty::HexPaddingAddr(options.hex_padding_addr.unwrap_or(2)))?;
         formatter.set_property(FormatterProperty::HexPaddingDisp(options.hex_padding_disp.unwrap_or(2)))?;
@@ -148,8 +150,11 @@ fn is_hex_digit(b: u8) -> bool {
     (b as char).is_digit(16)
 }
 
-fn decode_bytes_into(hex: &[u8], bytes: &mut Vec<u8>) {
-    let mut tmp = 0;
+fn decode_bytes_into<A>(hex: &[u8], bytes: &mut ArrayVec<A>)
+where
+    A: Array<Item = u8>,
+{
+    let mut last_val = None;
 
     for (i, &b) in hex.iter().enumerate() {
         if b == b'0' && i + 1 < hex.len() && hex[i + 1] == b'x' {
@@ -158,12 +163,12 @@ fn decode_bytes_into(hex: &[u8], bytes: &mut Vec<u8>) {
 
         if is_hex_digit(b) {
             let b = b.to_ascii_uppercase();
-            if tmp != 0 {
+            if let Some(tmp) = last_val {
                 bytes.push((tmp << 4) | decode_hex(b));
 
-                tmp = 0;
+                last_val = None;
             } else {
-                tmp = decode_hex(b);
+                last_val = Some(decode_hex(b));
             }
         }
     }
@@ -178,16 +183,21 @@ impl Handler {
                 r#"Available commands:
 ```
 !help - Help
-!dis OPTIONS <hex here> - disassemble
+!dis OPTIONS <data here> - disassemble
    OPTIONS can be one or more of the following, seperated by a space:
    +x86, +x64, +uppercase={true|false}, +force_memseg={true|false}, +force_memsize={true|false},
    +address_format={absolute|unsigned_rel|signed_rel}, +disp_format={signed|unsigned}, +imm_format={auto|signed|unsigned}
+   +pad_addr=0-255 +pad_disp=0-255 +pad_imm=0-255
+Defaults are:
+   +x86 +uppercase=false +force_memseg=false +force_memsize=false +address_format=absolute
+   +disp_foramt=signed +imm_format=unsigned
+   +pad_addr=2 +pad_disp=2 +pad_imm=2
+Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as if there is no `x` directly following it
+(i.e. you can most likely paste the data in any format you like)
 For example:
 ```
-!dis +x64 \x90
-or
-!dis +x64 0x90
-or
+!dis +x64 "\x90\x90"
+!dis +x64 0x90, 0x90
 !dis +x64 9090
 "#,
             )
@@ -195,7 +205,9 @@ or
     }
 
     fn disassemble(&self, data: &str, msg: &Message) {
-        let mut bytes = Vec::with_capacity(1024);
+        // 1024 bytes is enough since discord messages are limited to 2000 chars and we can decode
+        // 1000 bytes at maximum.
+        let mut bytes = ArrayVec::<[_; 1024]>::new();
         let mut options = Options::default();
 
         for thing in data.trim().split(' ') {
@@ -218,26 +230,27 @@ or
         message.push_str("```x86asm\n");
 
         for (insn, ip) in decoder.instruction_iterator(&bytes, base) {
-            unsafe { std::ptr::write_bytes(buffer.as_mut_ptr(), 0u8, 200) };
-
             formatter
                 .format_instruction_raw(&insn, &mut buffer, None)
                 .unwrap();
 
-            let insn = unsafe { CStr::from_bytes_with_nul_unchecked(&buffer) }
+            let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
                 .to_str()
                 .unwrap();
 
-            write!(message, "0x{:016X} {}\n", ip, insn).unwrap();
+            // Limit the length of the message
+            if message.len() + insn.len() > 2000 - 6 {
+                message.push_str("...");
+                break;
+            }
+
+            write!(message, "0x{:08X} {}\n", ip, insn).unwrap();
         }
 
         message.push_str("```");
+        assert!(message.len() <= 2000);
 
-        if message.len() < 2000 {
-            msg.channel_id.say(message).unwrap();
-        } else {
-            msg.channel_id.say(message).unwrap();
-        }
+        msg.channel_id.say(message).unwrap();
     }
 }
 
