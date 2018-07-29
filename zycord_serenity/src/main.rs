@@ -48,9 +48,9 @@ impl EventHandler for Handler {
     fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected", ready.user.name);
         ctx.set_game(Game {
-            kind: GameType::Streaming,
-            name: "Zydis".into(),
-            url: Some("https://zydis.re".into()),
+            kind: GameType::Playing,
+            name: "Zydis: https://zydis.re".into(),
+            url: None,
         });
     }
 }
