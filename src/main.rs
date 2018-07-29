@@ -12,7 +12,7 @@ use std::num::ParseIntError;
 
 use arrayvec::{Array, ArrayVec};
 
-use discord::model::{Event, Message};
+use discord::model::{Event, Game, GameType, Message};
 use discord::Discord;
 
 use zydis::gen::{
@@ -208,9 +208,19 @@ impl Handler {
 !help - Help
 !dis OPTIONS <data here> - disassemble
    OPTIONS can be one or more of the following, seperated by a space:
-   +x86, +x64, +base=0..2^64 +uppercase={true|false}, +force_memseg={true|false}, +force_memsize={true|false},
-   +address_format={absolute|unsigned_rel|signed_rel}, +disp_format={signed|unsigned}, +imm_format={auto|signed|unsigned}
-   +pad_addr=0..255 +pad_disp=0-255 +pad_imm=0-255 +rewrite_cc={false|true}
+   +x86  32 bit mode
+   +x64  64 bit mode
+   +base=0..2^64 Base address to use in relative instructions
+   +uppercase={true|false} Uppercase mnemonics
+   +force_memseg={true|false} Force showing the segment
+   +force_memsize={true|false} Force showing the size
+   +address_format={absolute|unsigned_rel|signed_rel} What format to show addresses in
+   +disp_format={signed|unsigned} What format to show displacements in
+   +imm_format={auto|signed|unsigned} What format to show immediates in
+   +pad_addr=0..255 Number of padding bytes for addresses
+   +pad_disp=0..255 Number of padding bytes for displacements
+   +pad_imm=0..255 Number of padding bytes for immediates
+   +rewrite_cc={false|true} Rewrite condition codes in (V)CMPPS and (V)CMPPD to human readable form ("eq", "lt", ...)
 Defaults are:
    +x86 +base=0 +uppercase=false 
    +force_memseg=false +force_memsize=false +address_format=absolute
@@ -218,9 +228,7 @@ Defaults are:
    +pad_addr=2 +pad_disp=2 +pad_imm=2
    +rewrite_cc=false
 
-   rewrite_cc: rewrite condition codes in (V)CMPPS and (V)CMPPD instructions.
-
-Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as if there is no `x` directly following it
+Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data if there is no `x` directly following it
 (i.e. you can most likely paste the data in any format you like)
 For example:
 ```
@@ -317,20 +325,23 @@ fn main() {
 
     let (mut conn, _) = handler.discord.connect().unwrap();
 
-    let mut once = true;
+    // TODO: Why doesn't this work?
+
+    //conn.set_game(Some(Game {
+    //    name: "Zydis".into(),
+    //    url: Some("https://zydis.re".into()),
+    //    kind: GameType::Playing,
+    //}));
 
     loop {
         match conn.recv_event() {
             Ok(Event::MessageCreate(msg)) => handler.handle_message(msg),
-            Ok(_) => {
-                if once {
-                    conn.set_game_name("https://zydis.re".into());
-                    once = false;
-                }
-            }
+            Ok(_) => {}
             Err(discord::Error::Closed(code, body)) => {
                 println!("gateway closed with code {:?}: {}", code, body);
-                break;
+
+                let (new_conn, _) = handler.discord.connect().expect("connect failed");
+                conn = new_conn;
             }
             Err(e) => println!("{}", e),
         }
