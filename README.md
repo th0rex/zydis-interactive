@@ -16,3 +16,11 @@ cd zycord_serenity
 cargo run --release
 ```
 
+To run the repl do:
+```
+cd repl
+cargo run --release
+```
+
+In both cases you can type `!help` to get a list of commands.
+
