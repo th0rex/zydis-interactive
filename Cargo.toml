@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 arrayvec = "0.4.7"
-serenity = "0.5.5"
+discord = "0.8"
 zydis = { git = "https://github.com/zyantific/zydis-rs/" }

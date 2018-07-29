@@ -9,9 +9,8 @@ use std::num::ParseIntError;
 
 use arrayvec::{Array, ArrayVec};
 
-use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
-use serenity::prelude::*;
+use discord::model::{Event, Message};
+use discord::Discord;
 
 use zydis::gen::{
     ZYDIS_ADDRESS_WIDTH_32, ZYDIS_ADDRESS_WIDTH_64, ZYDIS_MACHINE_MODE_LONG_64,
@@ -174,12 +173,13 @@ where
     }
 }
 
-struct Handler;
+struct Handler {
+    discord: Discord,
+}
 
 impl Handler {
     fn help_message(&self, msg: &Message) {
-        msg.channel_id
-            .say(
+        self.discord.send_message(msg.channel_id,
                 r#"Available commands:
 ```
 !help - Help
@@ -199,7 +199,7 @@ For example:
 !dis +x64 "\x90\x90"
 !dis +x64 0x90, 0x90
 !dis +x64 9090
-"#,
+"#, "", false
             )
             .unwrap();
     }
@@ -250,12 +250,12 @@ For example:
         message.push_str("```");
         assert!(message.len() <= 2000);
 
-        msg.channel_id.say(message).unwrap();
+        self.discord
+            .send_message(msg.channel_id, &message, "", false)
+            .unwrap();
     }
-}
 
-impl EventHandler for Handler {
-    fn message(&self, _: Context, msg: Message) {
+    fn handle_message(&self, msg: Message) {
         if msg.author.bot {
             return;
         }
@@ -272,15 +272,31 @@ impl EventHandler for Handler {
             _ => {}
         }
     }
-
-    fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-    }
 }
 
 fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Expected token");
-    let mut client = Client::new(&token, Handler).unwrap();
+    let discord = Discord::from_bot_token(&token).unwrap();
+    let handler = Handler { discord };
 
-    client.start().unwrap();
+    let (mut conn, _) = handler.discord.connect().unwrap();
+
+    let mut once = true;
+
+    loop {
+        match conn.recv_event() {
+            Ok(Event::MessageCreate(msg)) => handler.handle_message(msg),
+            Ok(_) => {
+                if once {
+                    conn.set_game_name("https://zydis.re".into());
+                    once = false;
+                }
+            }
+            Err(discord::Error::Closed(code, body)) => {
+                println!("gateway closed with code {:?}: {}", code, body);
+                break;
+            }
+            Err(e) => println!("{}", e),
+        }
+    }
 }
