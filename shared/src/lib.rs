@@ -75,7 +75,8 @@ static HELP_MESSAGE: &'static str = r#"```
 Zydis is at       https://zydis.re
 Source Code is at https://github.com/th0rex/zydis-interactive
 !help - Help
-!dis OPTIONS <data here> - disassemble
+!dis OPTIONS <data here> - Disassemble the data
+Note: data and options may actually be interleaved, i.e. !dis +x64 0x90 +base=0x1000 90
    OPTIONS can be one or more of the following, seperated by a space:
    +x86  32 bit mode
    +x64  64 bit mode
@@ -97,8 +98,8 @@ Defaults are:
    +pad_addr=2 +pad_disp=2 +pad_imm=2
    +rewrite_cc=false
 
-Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data if there is no `x` directly following it
-(i.e. you can most likely paste the data in any format you like)
+Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data 
+if there is no `x` directly following it (i.e. you can most likely paste the data in any format you like)
 ```
 For example:
 !dis +x64 "\x90\x90"
