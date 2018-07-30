@@ -381,12 +381,8 @@ pub fn handle_command<V: VecLike<u8>>(
             bytes.clear();
             out.clear();
             out.push_str(init.unwrap_or(""));
-            Ok(Some(CommandResult::Disassembled(disassemble(
-                &command[5..],
-                bytes,
-                out,
-                length_limit,
-            )?)))
+            let result = disassemble(&command[5..], bytes, out, length_limit)?;
+            Ok(Some(CommandResult::Disassembled(result)))
         }
         _ => Ok(None),
     }

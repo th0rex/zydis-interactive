@@ -36,6 +36,10 @@ impl EventHandler for Handler {
         ) {
             Ok(Some(x)) => {
                 if let CommandResult::Disassembled(x) = x {
+                    if out == "```x86asm\n" {
+                        out.push_str("invalid input ...");
+                    }
+
                     if x {
                         out.push_str("...");
                     }
@@ -54,7 +58,7 @@ impl EventHandler for Handler {
         println!("{} is connected", ready.user.name);
         ctx.set_game(Game {
             kind: GameType::Playing,
-            name: "https://zydis.re".into(),
+            name: "!help | https://zydis.re".into(),
             url: None,
         });
     }
