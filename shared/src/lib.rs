@@ -8,9 +8,9 @@ extern crate failure;
 extern crate zydis;
 
 use std::convert::{TryFrom, TryInto};
+use std::error;
 use std::ffi::CStr;
 use std::fmt::{self, Write};
-use std::num::ParseIntError;
 use std::result;
 use std::str;
 
@@ -41,12 +41,10 @@ pub struct Error {
 
 #[derive(Clone, Debug, Fail)]
 pub enum ErrorKind {
-    #[fail(display = "Zydis formatting error: {}", _0)]
-    FormattingError(&'static str),
-    #[fail(display = "Invalid utf8 from zydis: {}", _0)]
-    UTF8Error(str::Utf8Error),
-    #[fail(display = "Failed to append to string: {}", _0)]
-    WriteError(fmt::Error),
+    #[fail(display = "Formatting error")]
+    FormatError,
+    #[fail(display = "Invalid number")]
+    ParseNumber,
 }
 
 impl Error {
@@ -163,18 +161,24 @@ struct Options {
 }
 
 trait ParseStrRadix<T> {
-    fn parse_radix(&self, base: u32) -> result::Result<T, ParseIntError>;
+    fn parse_radix(&self, base: u32) -> Result<T>;
 }
 
-impl ParseStrRadix<u64> for str {
-    fn parse_radix(&self, base: u32) -> result::Result<u64, ParseIntError> {
-        u64::from_str_radix(self, base)
+impl ParseStrRadix<u64> for [u8] {
+    fn parse_radix(&self, base: u32) -> Result<u64> {
+        let val = u64::from_str_radix(str::from_utf8(self).context(ErrorKind::ParseNumber)?, base)
+            .context(ErrorKind::ParseNumber)?;
+
+        Ok(val)
     }
 }
 
-impl ParseStrRadix<u8> for str {
-    fn parse_radix(&self, base: u32) -> result::Result<u8, ParseIntError> {
-        u8::from_str_radix(self, base)
+impl ParseStrRadix<u8> for [u8] {
+    fn parse_radix(&self, base: u32) -> Result<u8> {
+        let val = u8::from_str_radix(str::from_utf8(self).context(ErrorKind::ParseNumber)?, base)
+            .context(ErrorKind::ParseNumber)?;
+
+        Ok(val)
     }
 }
 
@@ -183,7 +187,7 @@ macro_rules! parse_number {
         let len = $s.len();
         if $o.len() > len && &$o[..len] == $s {
             let tmp = &$o[len..];
-            let (offset, base) = if tmp.find("0x").is_some() {
+            let (offset, base) = if tmp.starts_with(b"0x") {
                 (2, 16)
             } else {
                 (0, 10)
@@ -196,31 +200,31 @@ macro_rules! parse_number {
 
 impl Options {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn parse_option(&mut self, opt: &str) {
+    fn parse_option(&mut self, opt: &[u8]) {
         match opt {
-            "x86"                         => self.arch           = Some(Arch::X86),
-            "x64"                         => self.arch           = Some(Arch::X64),
-            "uppercase=true"              => self.uppercase      = Some(true),
-            "uppercase=false"             => self.uppercase      = Some(false),
-            "force_memseg=true"           => self.force_memseg   = Some(true),
-            "force_memseg=false"          => self.force_memseg   = Some(false),
-            "force_memsize=true"          => self.force_memsize  = Some(true),
-            "force_memsize=false"         => self.force_memsize  = Some(false),
-            "address_format=absolute"     => self.address_format = Some(ZYDIS_ADDR_FORMAT_ABSOLUTE),
-            "address_format=unsigned_rel" => self.address_format = Some(ZYDIS_ADDR_FORMAT_RELATIVE_UNSIGNED),
-            "address_format=signed_rel"   => self.address_format = Some(ZYDIS_ADDR_FORMAT_RELATIVE_SIGNED),
-            "disp_format=signed"          => self.address_format = Some(ZYDIS_DISP_FORMAT_HEX_SIGNED),
-            "disp_format=unsigned"        => self.address_format = Some(ZYDIS_DISP_FORMAT_HEX_UNSIGNED),
-            "imm_format=auto"             => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_AUTO),
-            "imm_format=signed"           => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_SIGNED),
-            "imm_format=unsigned"         => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_UNSIGNED),
-            "rewrite_cc=true"             => self.rewrite_cc     = Some(true),
-            "rewrite_cc=false"            => self.rewrite_cc     = Some(false),
-            _                             => {
-                parse_number!(self.base,             opt, "base=");
-                parse_number!(self.hex_padding_addr, opt, "pad_addr=");
-                parse_number!(self.hex_padding_disp, opt, "pad_disp=");
-                parse_number!(self.hex_padding_imm,  opt, "pad_imm=");
+            b"x86"                         => self.arch           = Some(Arch::X86),
+            b"x64"                         => self.arch           = Some(Arch::X64),
+            b"uppercase=true"              => self.uppercase      = Some(true),
+            b"uppercase=false"             => self.uppercase      = Some(false),
+            b"force_memseg=true"           => self.force_memseg   = Some(true),
+            b"force_memseg=false"          => self.force_memseg   = Some(false),
+            b"force_memsize=true"          => self.force_memsize  = Some(true),
+            b"force_memsize=false"         => self.force_memsize  = Some(false),
+            b"address_format=absolute"     => self.address_format = Some(ZYDIS_ADDR_FORMAT_ABSOLUTE),
+            b"address_format=unsigned_rel" => self.address_format = Some(ZYDIS_ADDR_FORMAT_RELATIVE_UNSIGNED),
+            b"address_format=signed_rel"   => self.address_format = Some(ZYDIS_ADDR_FORMAT_RELATIVE_SIGNED),
+            b"disp_format=signed"          => self.address_format = Some(ZYDIS_DISP_FORMAT_HEX_SIGNED),
+            b"disp_format=unsigned"        => self.address_format = Some(ZYDIS_DISP_FORMAT_HEX_UNSIGNED),
+            b"imm_format=auto"             => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_AUTO),
+            b"imm_format=signed"           => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_SIGNED),
+            b"imm_format=unsigned"         => self.imm_format     = Some(ZYDIS_IMM_FORMAT_HEX_UNSIGNED),
+            b"rewrite_cc=true"             => self.rewrite_cc     = Some(true),
+            b"rewrite_cc=false"            => self.rewrite_cc     = Some(false),
+            _                              => {
+                parse_number!(self.base,             opt, b"base=");
+                parse_number!(self.hex_padding_addr, opt, b"pad_addr=");
+                parse_number!(self.hex_padding_disp, opt, b"pad_disp=");
+                parse_number!(self.hex_padding_imm,  opt, b"pad_imm=");
             },
         }
     }
@@ -264,6 +268,33 @@ impl<'a> TryFrom<Options> for ParsedOptions<'a> {
         };
 
         Ok(ParsedOptions(user_data, base, formatter, decoder))
+    }
+}
+
+#[derive(Debug)]
+struct ZydisError {
+    s: &'static str,
+}
+
+impl fmt::Display for ZydisError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.s)
+    }
+}
+
+impl error::Error for ZydisError {
+    fn description(&self) -> &str {
+        self.s
+    }
+
+    fn cause(&self) -> Option<&dyn error::Error> {
+        None
+    }
+}
+
+fn zydis_err(x: ZydisStatusCodes) -> ZydisError {
+    ZydisError {
+        s: status_description(x),
     }
 }
 
@@ -319,7 +350,7 @@ fn decode_bytes_into<V: VecLike<u8>>(hex: &[u8], bytes: &mut V) {
 }
 
 fn disassemble<V: VecLike<u8>>(
-    data: &str,
+    data: &[u8],
     bytes: &mut V,
     out: &mut String,
     length_limit: Option<usize>,
@@ -327,21 +358,22 @@ fn disassemble<V: VecLike<u8>>(
     let mut options = Options::default();
     let limit = length_limit.unwrap_or_else(usize::max_value);
 
-    for thing in data.trim().split(' ') {
+    for thing in data.split(|&x| x == b' ') {
         if thing.len() == 0 {
             continue;
         }
 
-        if &thing[..1] == "+" {
+        if &thing[..1] == b"+" {
             options.parse_option(&thing[1..]);
         } else {
-            decode_bytes_into(thing.as_bytes(), bytes);
+            decode_bytes_into(thing, bytes);
         }
     }
 
     let ParsedOptions(mut user_data, base, formatter, decoder) = options
         .try_into()
-        .map_err(|x| ErrorKind::FormattingError(status_description(x)))?;
+        .map_err(zydis_err)
+        .context(ErrorKind::FormatError)?;
 
     let mut buffer = vec![0u8; 200];
 
@@ -356,18 +388,19 @@ fn disassemble<V: VecLike<u8>>(
 
         formatter
             .format_instruction_raw(&insn, &mut buffer, user_data)
-            .map_err(|x| ErrorKind::FormattingError(status_description(x)))?;
+            .map_err(zydis_err)
+            .context(ErrorKind::FormatError)?;
 
         let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
             .to_str()
-            .with_context(|e| ErrorKind::UTF8Error(e.clone()))?;
+            .context(ErrorKind::FormatError)?;
 
         // Limit the length of the message
         if out.len() + insn.len() > limit {
             return Ok(true);
         }
 
-        write!(out, "0x{:08X} {}\n", ip, insn).with_context(|e| ErrorKind::WriteError(e.clone()))?;
+        write!(out, "0x{:08X} {}\n", ip, insn).context(ErrorKind::FormatError)?;
     }
 
     Ok(false)
@@ -389,17 +422,18 @@ pub fn handle_command<V: VecLike<u8>>(
         return Ok(None);
     }
 
-    match &command[..5] {
-        "!help" => {
+    match &command.as_bytes()[..5] {
+        b"!help" => {
             out.clear();
             out.push_str(HELP_MESSAGE);
             Ok(Some(CommandResult::Help))
         }
-        "!dis " => {
+        b"!dis " => {
             bytes.clear();
             out.clear();
             out.push_str(init.unwrap_or(""));
-            let result = disassemble(&command[5..], bytes, out, length_limit)?;
+            let cmd = &command.as_bytes()[5..];
+            let result = disassemble(cmd, bytes, out, length_limit)?;
             Ok(Some(CommandResult::Disassembled(result)))
         }
         _ => Ok(None),
