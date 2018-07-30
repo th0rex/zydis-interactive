@@ -299,6 +299,11 @@ fn decode_bytes_into<V: VecLike<u8>>(hex: &[u8], bytes: &mut V) {
             }
         }
     }
+
+    if let Some(tmp) = last_val {
+        // Push single digit hex numbers
+        bytes.push(tmp);
+    }
 }
 
 fn disassemble<V: VecLike<u8>>(
