@@ -1,4 +1,4 @@
-use std::io::{stdin, stdout, BufRead, Result, Write};
+use std::io::{stdin, stdout, Result, Write};
 
 use shared::handle_command;
 
@@ -13,8 +13,10 @@ fn main() -> Result<()> {
     loop {
         inp.clear();
 
-        let stdin = stdin();
-        stdin.lock().read_line(&mut inp)?;
+        if stdin().read_line(&mut inp)? == 0 {
+            // On Ctrl+D we exit.
+            return Ok(());
+        }
 
         handle_command(&inp, &mut bytes, &mut out, None, None).unwrap();
 
