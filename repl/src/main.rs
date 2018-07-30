@@ -18,9 +18,13 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
-        handle_command(&inp, &mut bytes, &mut out, None, None).unwrap();
+        if !inp.trim().is_empty() {
+            handle_command(&inp, &mut bytes, &mut out, None, None).unwrap();
 
-        print!("{}> ", out);
+            print!("{}> ", out);
+        } else {
+            print!("> ");
+        }
         stdout().flush()?;
     }
 }
