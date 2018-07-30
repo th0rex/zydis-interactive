@@ -283,10 +283,22 @@ fn is_hex_digit(b: u8) -> bool {
 fn decode_bytes_into<V: VecLike<u8>>(hex: &[u8], bytes: &mut V) {
     let mut last_val = None;
 
-    for (i, &b) in hex.iter().enumerate() {
-        if b == b'0' && i + 1 < hex.len() && hex[i + 1] == b'x' {
+    for &b in hex {
+        // Handle \x and 0x.
+        // If one of those is present, we push the partial result if it exists and is not 0.
+        if b == b'x' || b == b'\\' {
+            if let Some(tmp) = last_val {
+                if tmp != 0 || b == b'\\' {
+                    bytes.push(tmp);
+                }
+            }
+
+            last_val = None;
             continue;
         }
+        //if b == b'0' && i + 1 < hex.len() && hex[i + 1] == b'x' {
+        //    continue;
+        //}
 
         if is_hex_digit(b) {
             let b = b.to_ascii_uppercase();
