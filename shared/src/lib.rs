@@ -7,12 +7,7 @@ extern crate failure;
 #[macro_use]
 extern crate zydis;
 
-use std::convert::{TryFrom, TryInto};
-use std::error;
-use std::ffi::CStr;
-use std::fmt::{self, Write};
-use std::result;
-use std::str;
+use std::{convert::TryFrom, ffi::CStr, fmt::Write, result, str};
 
 use arrayvec::{Array, ArrayVec};
 
@@ -26,8 +21,8 @@ use zydis::gen::{
     ZYDIS_IMM_FORMAT_HEX_AUTO, ZYDIS_IMM_FORMAT_HEX_SIGNED, ZYDIS_IMM_FORMAT_HEX_UNSIGNED,
 };
 use zydis::{
-    gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat, ZydisStatusCodes},
-    status_description, Decoder, Formatter, FormatterProperty,
+    gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat},
+    Decoder, Formatter, FormatterProperty, Result as ZydisResult, ZydisError,
 };
 
 mod rewrite_condition_code;
@@ -233,10 +228,10 @@ impl Options {
 struct ParsedOptions<'a>(Option<UserData>, u64, Formatter<'a>, Decoder);
 
 impl<'a> TryFrom<Options> for ParsedOptions<'a> {
-    type Error = ZydisStatusCodes;
+    type Error = ZydisError;
 
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn try_from(options: Options) -> result::Result<Self, Self::Error> {
+    fn try_from(options: Options) -> ZydisResult<Self> {
         let mut formatter = Formatter::new(ZYDIS_FORMATTER_STYLE_INTEL)?;
 
         let decoder = match options.arch.unwrap_or(Arch::X86) {
@@ -268,33 +263,6 @@ impl<'a> TryFrom<Options> for ParsedOptions<'a> {
         };
 
         Ok(ParsedOptions(user_data, base, formatter, decoder))
-    }
-}
-
-#[derive(Debug)]
-struct ZydisError {
-    s: &'static str,
-}
-
-impl fmt::Display for ZydisError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.s)
-    }
-}
-
-impl error::Error for ZydisError {
-    fn description(&self) -> &str {
-        self.s
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
-}
-
-fn zydis_err(x: ZydisStatusCodes) -> ZydisError {
-    ZydisError {
-        s: status_description(x),
     }
 }
 
@@ -370,10 +338,8 @@ fn disassemble<V: VecLike<u8>>(
         }
     }
 
-    let ParsedOptions(mut user_data, base, formatter, decoder) = options
-        .try_into()
-        .map_err(zydis_err)
-        .context(ErrorKind::FormatError)?;
+    let ParsedOptions(mut user_data, base, formatter, decoder) =
+        ParsedOptions::try_from(options).context(ErrorKind::FormatError)?;
 
     let mut buffer = vec![0u8; 200];
 
@@ -388,7 +354,6 @@ fn disassemble<V: VecLike<u8>>(
 
         formatter
             .format_instruction_raw(&insn, &mut buffer, user_data)
-            .map_err(zydis_err)
             .context(ErrorKind::FormatError)?;
 
         let insn = unsafe { CStr::from_ptr(buffer.as_ptr() as _) }
@@ -434,7 +399,7 @@ pub fn handle_command<V: VecLike<u8>>(
             bytes.clear();
             out.clear();
             out.push_str(init.unwrap_or(""));
-            let result = disassemble(cmd, bytes, out, length_limit)?;
+            let result = disassemble(&command.as_bytes()[5..], bytes, out, length_limit)?;
             Ok(Some(CommandResult::Disassembled(result)))
         }
         _ => Ok(None),

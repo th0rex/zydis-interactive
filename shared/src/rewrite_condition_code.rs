@@ -9,7 +9,7 @@ use zydis::gen::{
 };
 use zydis::{
     gen::{ZydisDecodedInstruction, ZydisDecodedOperand, ZydisStatusCodes, ZydisString},
-    user_data_to_c_void, Formatter, Hook, ZydisResult,
+    user_data_to_c_void, Formatter, Hook, Result, ZydisError,
 };
 
 static CONDITION_CODES: &'static [&'static str] = &[
@@ -24,8 +24,8 @@ pub struct UserData {
     pub omit_immediate: bool,
 }
 
-fn user_err<T>(_: T) -> ZydisStatusCodes {
-    ZYDIS_STATUS_USER
+fn user_err<T>(_: T) -> ZydisError {
+    ZYDIS_STATUS_USER.into()
 }
 
 pub fn print_mnemonic(
@@ -33,7 +33,7 @@ pub fn print_mnemonic(
     buffer: &mut ZydisString,
     insn: &ZydisDecodedInstruction,
     user_data: Option<&mut dyn Any>,
-) -> ZydisResult<()> {
+) -> Result<()> {
     match user_data.and_then(|x| x.downcast_mut::<UserData>()) {
         Some(&mut UserData {
             ref mut omit_immediate,
@@ -82,7 +82,7 @@ pub fn format_operand_imm(
     insn: &ZydisDecodedInstruction,
     operand: &ZydisDecodedOperand,
     user_data: Option<&mut dyn Any>,
-) -> ZydisResult<()> {
+) -> Result<()> {
     match user_data.and_then(|x| x.downcast_mut::<UserData>()) {
         Some(x) => match x {
             &mut UserData {
@@ -91,7 +91,7 @@ pub fn format_operand_imm(
                 ..
             } => {
                 if omit_immediate {
-                    Err(ZYDIS_STATUS_SKIP_OPERAND)
+                    Err(ZYDIS_STATUS_SKIP_OPERAND.into())
                 } else {
                     unsafe {
                         check!(
