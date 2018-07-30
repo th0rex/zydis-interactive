@@ -422,7 +422,9 @@ pub fn handle_command<V: VecLike<u8>>(
         return Ok(None);
     }
 
-    match &command.as_bytes()[..5] {
+    let cmd = &command.as_bytes()[..5];
+
+    match cmd {
         b"!help" => {
             out.clear();
             out.push_str(HELP_MESSAGE);
@@ -432,7 +434,6 @@ pub fn handle_command<V: VecLike<u8>>(
             bytes.clear();
             out.clear();
             out.push_str(init.unwrap_or(""));
-            let cmd = &command.as_bytes()[5..];
             let result = disassemble(cmd, bytes, out, length_limit)?;
             Ok(Some(CommandResult::Disassembled(result)))
         }
