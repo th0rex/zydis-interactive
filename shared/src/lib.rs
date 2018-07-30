@@ -71,9 +71,9 @@ impl From<Context<ErrorKind>> for Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-static HELP_MESSAGE: &'static str = r#"https://zydis.re
-Available commands:
-```
+static HELP_MESSAGE: &'static str = r#"```
+Zydis is at       https://zydis.re
+Source Code is at https://github.com/th0rex/zydis-interactive
 !help - Help
 !dis OPTIONS <data here> - disassemble
    OPTIONS can be one or more of the following, seperated by a space:
@@ -102,8 +102,8 @@ Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 
 ```
 For example:
 !dis +x64 "\x90\x90"
-!dis +x64 0x90, 0x90
-!dis +x64 9090
+!dis +x64 +rewrite_cc=true +force_memseg=true +force_memsize=true 0x62, 0xF1, 0x6C, 0x5F, 0xC2, 0x54, 0x98, 0x40, 0x0F
+!dis +x64 62F16C5FC25498400F
 "#;
 
 pub trait VecLike<T>: AsRef<[T]> {
