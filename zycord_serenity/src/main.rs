@@ -49,7 +49,11 @@ impl EventHandler for Handler {
 
                 send(&msg, &out);
             }
-            Err(e) => send(&msg, &format!("internal error occured: {}", e.kind())),
+            Err(e) => {
+                send(&msg, &format!("internal error occured: {}", e.kind()));
+                println!("Error: {}", e.kind());
+            }
+
             _ => {}
         }
     }
