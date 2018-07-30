@@ -7,7 +7,9 @@ use zydis::gen::{
     ZYDIS_OPERAND_TYPE_IMMEDIATE, ZYDIS_STATUS_SKIP_OPERAND, ZYDIS_STATUS_USER,
 };
 use zydis::{
-    gen::{ZydisDecodedInstruction, ZydisDecodedOperand, ZydisStatusCodes, ZydisString},
+    gen::{
+        ZydisDecodedInstruction, ZydisDecodedOperand, ZydisFormatter, ZydisStatusCodes, ZydisString,
+    },
     user_data_to_c_void, Formatter, Hook, Result, ZydisError,
 };
 
@@ -66,7 +68,12 @@ pub fn print_mnemonic(
             *omit_immediate = false;
             unsafe {
                 check!(
-                    orig_print_mnemonic(mem::transmute(formatter), buffer, insn, ptr::null_mut()),
+                    orig_print_mnemonic(
+                        formatter as *const Formatter as *const ZydisFormatter,
+                        buffer,
+                        insn,
+                        ptr::null_mut()
+                    ),
                     ()
                 )
             }
@@ -95,7 +102,7 @@ pub fn format_operand_imm(
                     unsafe {
                         check!(
                             orig_format_operand(
-                                mem::transmute(formatter),
+                                formatter as *const Formatter as *const ZydisFormatter,
                                 buffer,
                                 insn,
                                 operand,

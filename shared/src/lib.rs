@@ -58,7 +58,7 @@ impl From<ErrorKind> for Error {
 
 impl From<Context<ErrorKind>> for Error {
     fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner: inner }
+        Error { inner }
     }
 }
 
@@ -327,7 +327,7 @@ fn disassemble<V: VecLike<u8>>(
     let limit = length_limit.unwrap_or_else(usize::max_value);
 
     for thing in data.split(|&x| x == b' ') {
-        if thing.len() == 0 {
+        if thing.is_empty() {
             continue;
         }
 
@@ -365,7 +365,7 @@ fn disassemble<V: VecLike<u8>>(
             return Ok(true);
         }
 
-        write!(out, "0x{:08X} {}\n", ip, insn).context(ErrorKind::FormatError)?;
+        writeln!(out, "0x{:08X} {}", ip, insn).context(ErrorKind::FormatError)?;
     }
 
     Ok(false)
