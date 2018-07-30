@@ -18,7 +18,7 @@ fn main() -> Result<()> {
 
         handle_command(&inp, &mut bytes, &mut out, None, None).unwrap();
 
-        print!("{}\n> ", out);
+        print!("{}> ", out);
         stdout().flush()?;
     }
 }
