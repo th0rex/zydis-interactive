@@ -4,8 +4,7 @@ use std::{any::Any, fmt::Write, mem, ptr};
 
 use zydis::gen::{
     ZYDIS_MNEMONIC_CMPPD, ZYDIS_MNEMONIC_CMPPS, ZYDIS_MNEMONIC_VCMPPD, ZYDIS_MNEMONIC_VCMPPS,
-    ZYDIS_OPERAND_TYPE_IMMEDIATE, ZYDIS_STATUS_SKIP_OPERAND, ZYDIS_STATUS_SUCCESS,
-    ZYDIS_STATUS_USER,
+    ZYDIS_OPERAND_TYPE_IMMEDIATE, ZYDIS_STATUS_SKIP_OPERAND, ZYDIS_STATUS_USER,
 };
 use zydis::{
     gen::{ZydisDecodedInstruction, ZydisDecodedOperand, ZydisStatusCodes, ZydisString},
