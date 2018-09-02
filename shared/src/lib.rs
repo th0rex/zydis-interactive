@@ -14,11 +14,11 @@ use arrayvec::{Array, ArrayVec};
 use failure::{Context, ResultExt};
 
 use zydis::gen::{
-    ZYDIS_ADDRESS_WIDTH_32, ZYDIS_ADDRESS_WIDTH_64, ZYDIS_MACHINE_MODE_LONG_64,
-    ZYDIS_MACHINE_MODE_LONG_COMPAT_32, ZYDIS_ADDR_FORMAT_ABSOLUTE,
+    ZYDIS_ADDRESS_WIDTH_32, ZYDIS_ADDRESS_WIDTH_64, ZYDIS_ADDR_FORMAT_ABSOLUTE,
     ZYDIS_ADDR_FORMAT_RELATIVE_SIGNED, ZYDIS_ADDR_FORMAT_RELATIVE_UNSIGNED,
     ZYDIS_DISP_FORMAT_HEX_SIGNED, ZYDIS_DISP_FORMAT_HEX_UNSIGNED, ZYDIS_FORMATTER_STYLE_INTEL,
     ZYDIS_IMM_FORMAT_HEX_AUTO, ZYDIS_IMM_FORMAT_HEX_SIGNED, ZYDIS_IMM_FORMAT_HEX_UNSIGNED,
+    ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_MACHINE_MODE_LONG_COMPAT_32,
 };
 use zydis::{
     gen::{ZydisAddressFormat, ZydisDisplacementFormat, ZydisImmediateFormat},
@@ -91,7 +91,7 @@ Defaults are:
    +pad_addr=2 +pad_disp=2 +pad_imm=2
    +rewrite_cc=false
 
-Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data 
+Most invalid bytes will be ignored, only [0-9A-Fa-f] are treated as data, and 0 is only treated as data
 if there is no `x` directly following it (i.e. you can most likely paste the data in any format you like)
 ```
 For example:

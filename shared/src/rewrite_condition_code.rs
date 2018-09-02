@@ -46,7 +46,7 @@ pub fn print_mnemonic(
             let count = insn.operandCount as usize;
 
             if count > 0 && insn.operands[count - 1].type_ == ZYDIS_OPERAND_TYPE_IMMEDIATE as u8 {
-                let cc = unsafe { insn.operands[count].imm.value.u as usize };
+                let cc = unsafe { insn.operands[count - 1].imm.value.u as usize };
 
                 match insn.mnemonic as u32 {
                     ZYDIS_MNEMONIC_CMPPS if cc < 8 => {
