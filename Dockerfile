@@ -3,6 +3,7 @@ WORKDIR /root
 RUN apt-get update && apt-get install clang-4.0 libclang-4.0-dev libsodium-dev -y
 COPY shared shared
 COPY zycord_serenity zycord_serenity 
+COPY repl repl
 COPY Cargo.toml Cargo.toml
 COPY Cargo.lock Cargo.lock
 ENV CC=clang-4.0
